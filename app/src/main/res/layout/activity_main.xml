@@ -32,6 +32,7 @@
             android:layout_height="50dp"
             android:drawablePadding="8dp"
             android:hint="Email"
+            android:inputType="textEmailAddress"
             android:padding="8dp"
             android:textColor="@color/black"
             app:layout_constraintEnd_toEndOf="parent"
