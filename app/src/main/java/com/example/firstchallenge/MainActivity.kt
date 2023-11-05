@@ -95,5 +95,6 @@ class MainActivity : AppCompatActivity() {
     private fun goToHome(){
         val i = Intent(this, HomeActivity::class.java)
         startActivity(i)
+        finish()
     }
 }
