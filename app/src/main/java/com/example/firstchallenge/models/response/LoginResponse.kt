@@ -15,9 +15,7 @@ package com.example.firstchallenge.models.response
 }*/
 
 
-data class LoginResponse(
-    val data: Login
-)
+data class LoginResponse(val data: Login)
 
 data class Login(
     val id: String,

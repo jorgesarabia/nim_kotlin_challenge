@@ -11,7 +11,11 @@ import android.widget.Toast
 import com.example.firstchallenge.FirstChallengeApplication.Companion.pref
 import com.example.firstchallenge.io.ApiService
 import com.example.firstchallenge.models.request.LoginRequest
+import com.example.firstchallenge.models.response.ErrorsResponse
 import com.example.firstchallenge.models.response.LoginResponse
+import com.example.firstchallenge.models.response.UserResponse
+import com.google.gson.GsonBuilder
+import com.google.gson.JsonParseException
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
@@ -32,8 +36,7 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
 
         if(pref.getToken().isNotEmpty()){
-            Log.d("Token_guardado", pref.getToken())
-            goToHome()
+            getUserProfile()
         }
 
         email = findViewById(R.id.email)
@@ -50,20 +53,54 @@ class MainActivity : AppCompatActivity() {
                 performLogin(emailText, passwordText)
             }
         })
+    }
 
+    private fun getUserProfile()  {
+        val call = apiService.getCurrentUser()
 
+        call.enqueue(object: Callback<UserResponse>{
+            override fun onResponse(call: Call<UserResponse>, response: Response<UserResponse>) {
+                if(response.isSuccessful) {
+                    val user = response.body()
+
+                    if(user == null){
+                        //Toast.makeText(applicationContext,"Error", Toast.LENGTH_SHORT).show()
+                        return
+                    }
+                    goToHome()
+                } else {
+                    val errorBodyString = response.errorBody()?.string()
+                    if(!errorBodyString.isNullOrEmpty()){
+                        Log.e("ErrorEnRespuesta", response.errorBody()?.string() ?: "No error body")
+                        try {
+                            val gson = GsonBuilder().create()
+                            val apiError = gson.fromJson(errorBodyString, ErrorsResponse::class.java)
+                            val firstError = apiError.errors?.first()
+                            val errorCode = firstError?.code
+                            Log.e("ErrorCode", errorCode?:"No code")
+
+//                            Toast.makeText(applicationContext,
+//                                firstError?.detail?:"Unknown Error",
+//                                Toast.LENGTH_SHORT).show()
+
+                            return
+                        } catch (e: JsonParseException) {
+                            Log.e("JsonParseException", e.toString())
+                        }
+                    }
+                }
+                //Toast.makeText(applicationContext,"Unknown Error", Toast.LENGTH_SHORT).show()
+            }
+
+            override fun onFailure(call: Call<UserResponse>, t: Throwable) {
+                //Toast.makeText(applicationContext,"Unknown Error", Toast.LENGTH_SHORT).show()
+            }
+        })
     }
 
     private fun performLogin(email: String, password: String) {
 
-        val request = LoginRequest(
-            grant_type = "password",
-            email = email,
-            password = password,
-            client_id = "ofzl-2h5ympKa0WqqTzqlVJUiRsxmXQmt5tkgrlWnOE",
-            client_secret = "lMQb900L-mTeU-FVTCwyhjsfBwRCxwwbCitPob96cuU"
-        )
-
+        val request = LoginRequest(email = email, password = password)
         val call = apiService.login(loginRequest = request)
 
         call.enqueue(object: Callback<LoginResponse>{
@@ -72,7 +109,7 @@ class MainActivity : AppCompatActivity() {
                     val loginResponse = response.body()
 
                     if(loginResponse == null){
-                        Toast.makeText(applicationContext,"Error", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(applicationContext,"No Body", Toast.LENGTH_SHORT).show()
                         return
                     }
 
@@ -80,14 +117,34 @@ class MainActivity : AppCompatActivity() {
                     val refreshToken = loginResponse.data.attributes.refresh_token
 
                     pref.saveTokens(token, refreshToken)
-                    goToHome()
+                    getUserProfile()
+                    return
                 } else {
-                    Toast.makeText(applicationContext,"email/password combination does not match", Toast.LENGTH_SHORT).show()
+                    val errorBodyString = response.errorBody()?.string()
+                    if(!errorBodyString.isNullOrEmpty()){
+                        Log.e("ResponseError", response.errorBody()?.string() ?: "No error body")
+                        try {
+                            val gson = GsonBuilder().create()
+                            val apiError = gson.fromJson(errorBodyString, ErrorsResponse::class.java)
+                            val firstError = apiError.errors?.first()
+                            val errorCode = firstError?.code
+                            Log.e("ErrorCode", errorCode?:"No code")
+
+                            Toast.makeText(applicationContext,
+                                firstError?.detail?:"Unknown Error",
+                                Toast.LENGTH_SHORT).show()
+
+                            return
+                        } catch (e: JsonParseException) {
+                            Log.e("JsonParseException", e.toString())
+                        }
+                    }
                 }
+                Toast.makeText(applicationContext,"Error in response", Toast.LENGTH_SHORT).show()
             }
 
             override fun onFailure(call: Call<LoginResponse>, t: Throwable) {
-                Toast.makeText(applicationContext,"Error", Toast.LENGTH_SHORT).show()
+                Toast.makeText(applicationContext,"Unknown Error", Toast.LENGTH_SHORT).show()
             }
         })
     }

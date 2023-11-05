@@ -14,7 +14,7 @@ package com.example.firstchallenge.models.response
 }
 */
 
-data class User(
+data class UserResponse(
     val id: String,
     val attributes: UserAttributes,
 )
