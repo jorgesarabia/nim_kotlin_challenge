@@ -4,17 +4,30 @@ import android.content.Context
 
 class PreferenceHelper(private val context:Context) {
 
-    private val cDbNAME = "appShared"
-    private val cTOKEN = "token"
+    private val cDbName = "appShared"
+    private val cToken = "token"
+    private val cRefreshToken = "token"
 
-    private val storage = context.getSharedPreferences(cDbNAME, 0)
+    private val storage = context.getSharedPreferences(cDbName, 0)
 
-    fun saveToken(token: String) {
-        storage.edit().putString(cTOKEN, token).apply()
+    fun saveTokens(token: String, refreshToken: String ) {
+        storage.edit().putString(cToken, token).apply()
+        storage.edit().putString(cRefreshToken, refreshToken).apply()
+    }
+
+    fun removeTokens() {
+        val editor = storage.edit()
+        editor.remove(cToken)
+        editor.remove(cRefreshToken)
+        editor.apply()
     }
 
     fun getToken():String {
-        return  storage.getString(cTOKEN, "")!!
+        return  storage.getString(cToken, "")!!
+    }
+
+    fun getRefreshToken():String {
+        return  storage.getString(cRefreshToken, "")!!
     }
 
 }
