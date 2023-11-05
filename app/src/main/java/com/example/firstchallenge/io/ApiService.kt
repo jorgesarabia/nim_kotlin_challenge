@@ -1,5 +1,6 @@
 package com.example.firstchallenge.io
 
+import android.provider.Settings.Global
 import android.util.Log
 import android.widget.Toast
 import com.example.firstchallenge.FirstChallengeApplication.Companion.pref
@@ -10,12 +11,12 @@ import com.example.firstchallenge.models.response.LoginResponse
 import com.example.firstchallenge.models.response.UserResponse
 import com.google.gson.GsonBuilder
 import com.google.gson.JsonParseException
+import kotlinx.coroutines.*
+import okhttp3.Dispatcher
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Response
-import retrofit2.Call
-import retrofit2.Callback
-import retrofit2.Retrofit
+import retrofit2.*
 import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.Body
 import retrofit2.http.GET
@@ -65,13 +66,20 @@ class TokenInterceptor : Interceptor {
             val responseBody = response.body()
             val error = response.message()
             val some = response.networkResponse()
+            val code = response.code()
 
-            if (response.code() == 401 && response.body()?.string()?.contains("Token expired") == true) {
-                val newAccessToken = refreshAccessToken()
+            if (response.code() == 401) {
+                val newAccessToken: String?
+
+                runBlocking {
+                    val getNewAccessToken = async { refreshAccessToken() }
+                    newAccessToken = getNewAccessToken.await()
+                }
 
                 if (newAccessToken != null) {
                     val renewedRequest = originalRequest.newBuilder()
                     renewedRequest.addHeader("Authorization", "Bearer $newAccessToken")
+                    response.close()
                     return chain.proceed(renewedRequest.build())
                 }
             }
@@ -82,46 +90,51 @@ class TokenInterceptor : Interceptor {
         return chain.proceed(originalRequest)
     }
 
-    private fun refreshAccessToken(): String? {
+    private suspend fun refreshAccessToken(): String?  {
         try {
             val refreshTokenRequest = RefreshTokenRequest(refresh_token = pref.getRefreshToken())
             val apiService = ApiService.create()
-            val call = apiService.refreshToken(refreshTokenRequest = refreshTokenRequest)
+
 
             pref.removeTokens()
 
-            call.enqueue(object: Callback<LoginResponse>{
-                override fun onResponse(call: Call<LoginResponse>, response: retrofit2.Response<LoginResponse>) {
-                    if(response.isSuccessful) {
-                        val loginResponse = response.body() ?: return
+            runBlocking {
+                val response = apiService.refreshToken(refreshTokenRequest = refreshTokenRequest).awaitResponse()
+                if(response.isSuccessful) {
+                    val loginResponse = response.body()
 
+                    if (loginResponse != null) {
                         val token = loginResponse.data.attributes.access_token
                         val refreshToken = loginResponse.data.attributes.refresh_token
 
                         pref.saveTokens(token, refreshToken)
-                    } else {
-                        val errorBodyString = response.errorBody()?.string()
-                        if(!errorBodyString.isNullOrEmpty()){
-                            Log.e("RequestError", response.errorBody()?.string() ?: "No error body")
-                            try {
-                                val gson = GsonBuilder().create()
-                                val apiError = gson.fromJson(errorBodyString, ErrorsResponse::class.java)
-                                val firstError = apiError.errors?.first()
-                                val errorCode = firstError?.code
-                                Log.e("ErrorCode", errorCode?:"No code")
-
-                                return
-                            } catch (e: JsonParseException) {
-                                Log.e("JsonParseException", e.toString())
-                            }
+                    }
+                } else {
+                    val errorBodyString = response.errorBody()?.string()
+                    if(!errorBodyString.isNullOrEmpty()){
+                        Log.e("RequestError", response.errorBody()?.string() ?: "No error body")
+                        try {
+                            val gson = GsonBuilder().create()
+                            val apiError = gson.fromJson(errorBodyString, ErrorsResponse::class.java)
+                            val firstError = apiError.errors?.first()
+                            val errorCode = firstError?.code
+                            Log.e("ErrorCode", errorCode?:"No code")
+                        } catch (e: JsonParseException) {
+                            Log.e("JsonParseException", e.toString())
                         }
                     }
                 }
+            }
 
-                override fun onFailure(call: Call<LoginResponse>, t: Throwable) {
-                    // Handle error
-                }
-            })
+//            call.enqueue(object: Callback<LoginResponse>{
+//                override fun onResponse(call: Call<LoginResponse>, response: retrofit2.Response<LoginResponse>) {
+//
+//                }
+//
+//                override fun onFailure(call: Call<LoginResponse>, t: Throwable) {
+//                    // Handle error
+//                }
+//            })
 
         } catch (e: Exception) {
             Log.e("Exception", e.toString())
